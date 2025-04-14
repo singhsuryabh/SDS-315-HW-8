@@ -1,0 +1,185 @@
+---
+title: "SDS 315 HW 8"
+author: "Suryabh Singh"
+date: "2025-04-14"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Suryabh Singh
+
+**Suryabh Singh** **ss229756** **GitHub Repository:** [GitHub Link](https://github.com/singhsuryabh/SDS-315-HW-8)
+
+#Upload Dataset
+```{r}
+library(ggplot2)
+library(dplyr)
+set.seed(123)
+creatinine <- read.csv("/Users/suryabhsingh/Desktop/SDS 315/creatinine.csv")
+```
+
+##**Problem 1**
+
+**Part A**
+
+Regression Equation = 147.813 - 0.620 * (age)
+
+Plug in age 55 into the regression equation:
+147.813 - 0.620 * (55) = 113.71 mL/min
+
+I used the regression formula derived from the data to predict the clearance rate by substituting age = 55 into the equation. This gives an expected rate of 113.71 mL/min.
+
+**Part B**
+The slope of the regression line tells us the average change in clearance per year of age.
+
+Slope = -0.620 mL/min per year
+
+The slope of –0.620 means that each additional year of age is associated with a decrease of about 0.620 mL/min in creatinine clearance. This value comes directly from the regression output.
+
+**Part C**
+Compare each person's residual (actual - predicted):
+
+40 Year Old:
+147.813 - 0.620 * 40 = 123.01 
+Residual = 135 - 123.01 = +11.99
+
+60 Year Old:
+147.813 - 0.620 * 60 = 111.61
+Residual = 112 - 111.61 = +0.39
+
+We calculated how much higher each person’s actual clearance is compared to what the model predicts for their age. The 40-year-old exceeds expectations by 11.99, while the 60-year-old exceeds by only 0.39. Therefore, the 40-year-old is healthier for their age.
+
+
+##**Problem 2**
+
+```{r}
+library(ggplot2)
+library(dplyr)
+set.seed(123)
+covid <- read.csv("/Users/suryabhsingh/Desktop/SDS 315/covid.csv")
+```
+
+**Fitting Models**
+```{r}
+fit_model <- function(data) {
+  data <- data %>%
+    mutate(log_deaths = log(deaths))
+  
+  model <- lm(log_deaths ~ days_since_first_death, data = data)
+  growth_rate <- coef(model)[2]
+  doubling_time <- log(2) / growth_rate
+  
+  list(model = model, growth_rate = growth_rate, doubling_time = doubling_time)
+}
+
+italy_data <- filter(covid, country == "Italy")
+spain_data <- filter(covid, country == "Spain")
+
+italy_model <- fit_model(italy_data)
+spain_model <- fit_model(spain_data)
+```
+
+**Growth Rate and Doubling Time**
+```{r}
+cat("**Italy**\n")
+cat("Growth Rate:", round(italy_model$growth_rate, 3), "\n")
+cat("Doubling Time:", round(italy_model$doubling_time, 1), "days\n\n")
+
+cat("**Spain**\n")
+cat("Growth Rate:", round(spain_model$growth_rate, 3), "\n")
+cat("Doubling Time:", round(spain_model$doubling_time, 1), "days\n")
+```
+
+**95% Confidence Interval - Italy**
+```{r}
+bootstrap_ci <- function(data, n = 1000) {
+  boot_rates <- numeric(n)
+  boot_doublings <- numeric(n)
+  
+  for (i in 1:n) {
+    boot <- data %>% sample_frac(replace = TRUE)
+    model <- lm(log(deaths) ~ days_since_first_death, data = boot)
+    r <- coef(model)[2]
+    boot_rates[i] <- r
+    boot_doublings[i] <- log(2) / r
+  }
+  
+  list(
+    growth_ci = quantile(boot_rates, c(0.025, 0.975)),
+    doubling_ci = quantile(boot_doublings, c(0.025, 0.975))
+  )
+}
+
+italy_ci <- bootstrap_ci(italy_data)
+
+cat("**Italy – 95% Confidence Intervals**\n")
+cat("Growth Rate CI:", round(italy_ci$growth_ci, 3), "\n")
+cat("Doubling Time CI:", round(italy_ci$doubling_ci, 1), "\n")
+```
+
+**95% Confidence Interval - Spain**
+
+```{r}
+spain_ci <- bootstrap_ci(spain_data)
+
+cat("**Spain – 95% Confidence Intervals**\n")
+cat("Growth Rate CI:", round(spain_ci$growth_ci, 3), "\n")
+cat("Doubling Time CI:", round(spain_ci$doubling_ci, 1), "\n")
+```
+
+**Line Graph of Daily Reported Deaths Over Time**
+
+```{r}
+ggplot(covid, aes(x = days_since_first_death, y = deaths, color = country)) +
+  geom_line(size = 1.1) +
+  labs(
+    title = "Daily Reported COVID-19 Deaths",
+    x = "Days Since First Death",
+    y = "Deaths",
+    color = "Country"
+  ) +
+  theme_minimal(base_size = 14)
+```
+
+##**Problem 3**
+
+```{r}
+library(ggplot2)
+library(dplyr)
+set.seed(123)
+ milk <- read.csv("/Users/suryabhsingh/Desktop/SDS 315/milk.csv")
+```
+
+**95% Bootstrapped Confidence Interval**
+```{r}
+set.seed(42)
+
+bootstrap_elasticity <- function(data, n = 1000) {
+  boot_estimates <- numeric(n)
+  
+  for (i in 1:n) {
+    boot_sample <- data %>%
+      sample_frac(replace = TRUE) %>%
+      mutate(
+        log_price = log(price),
+        log_sales = log(sales)
+      )
+    
+    boot_model <- lm(log_sales ~ log_price, data = boot_sample)
+    boot_estimates[i] <- coef(boot_model)["log_price"]
+  }
+  
+  return(quantile(boot_estimates, c(0.025, 0.975)))
+}
+
+# Run the bootstrap
+elasticity_ci <- bootstrap_elasticity(milk)
+elasticity_ci
+```
+
+**Interpretation**
+
+To estimate the price elasticity of demand, I used a power-law model, which I linearized by taking the logarithm of both sides: log(Q) = log(K) + (price elasticity) (log(B)). Then, I fit a linear regression of log(sales) on log(price) to estimate the price elasticity. To quantify uncertainty, I bootstrapped the data 1,000 times to compute a 95% confidence interval.
